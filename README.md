@@ -21,7 +21,7 @@ Architecuture details:
   * Acoustic encoder is proposed in the paper, prediction network and joint network is based on LSTM layers as used in [this paper](https://arxiv.org/abs/1811.06621)
   * Acoustic encoder:
     It consists of multiple convolution blocks (23 in all the experiments), where each block C<sub>i</sub> is made up of multiple depth-wise separable convolution layers. A convolution block is shown below with details for all 23 blocks in following table.
-    ![alt text](convblock.png) 
+    ![alt text](assets/convblock.png) 
 
     | Block Id                     | #Conv Layers | #Output Channels | Kernel Size | Other       |
     |------------------------------|--------------|------------------|-------------|-------------|
@@ -38,7 +38,7 @@ Architecuture details:
     Stride of 2 in a convolution block means last convolution layer in that block has a stride of 2, rest of them have stride of 1.
 
     SE is squeeze and excitation layer as shown below
-    ![alt text](SE.png) 
+    ![alt text](assets/SE.png) 
 
     3 different model variations with *global context* are shown below. The authors also experiment with context sizes of None, 256, 512 and 1024. Currently, the implementation allows either global context or no context at all.
     | Model | \alpha | #Params(M) |
@@ -58,7 +58,6 @@ SpecAugment:
 
 Author's observations:
   * Swish activation, f(x) = x \cdot \sigma ( \beta x), works better than RELU. \beta = 1 is used in the paper
-  * Increasing context size improves the model performance. Model without any context also performs very well and is comparable with model performances with non-zero context size
-  * Context in SE layer significantly improves performance on the test-other set
-  * The proposed architecture is also effective on large scale dataset
+  * Increasing context size in SE layer improves the model performance on test-other set. Model without any context also performs very well and is comparable with model performances with non-zero context size
   * A progressive downsampling of 8 achieves good tradeoff between computational cost and model performance
+  * The proposed architecture is also effective on large scale dataset
