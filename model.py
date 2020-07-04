@@ -52,7 +52,7 @@ class SELayer(tf.keras.layers.Layer):
 
 
 class ConvBlock(tf.keras.layers.Layer):
-    def __init__(self, num_layers, se_units, filters,
+    def __init__(self, se_units, num_layers, filters,
                  kernel_size, strides=1, padding="same", residual=True):
         """ num_layers : int
             se_units   : [int]

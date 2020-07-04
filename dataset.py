@@ -32,7 +32,7 @@ def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, ba
 
     def _generate_librispeech_examples():
       """Generate examples from a Librispeech directory."""
-      transcripts_glob = os.path.join(librispeech_dir, "%s/*/*/*.txt" % data_key)
+      transcripts_glob = os.path.join(librispeech_dir, "%s*/*/*/*.txt" % data_key)
       for transcript_file in glob.glob(transcripts_glob):
           path = os.path.dirname(transcript_file)
           for line in open(transcript_file).read().strip().splitlines():
