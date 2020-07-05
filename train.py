@@ -1,6 +1,6 @@
 import argparse
-import rnnt_loss
 import tensorflow as tf
+from warprnnt_tensorflow import rnnt_loss
 
 from dataset import create_dataset
 from model import ConvBlock, ContextNet
@@ -68,28 +68,31 @@ def train(num_units, num_vocab, num_lstms, lstm_units, out_dim,
     ckpt = tf.train.Checkpoint(step=tf.Variable(1), optimizer=optimizer, model=model)
     ckpt_manager = tf.train.CheckpointManager(ckpt, './ckpt', max_to_keep=10)
 
+    # TODO Implement greedy decoding for error
+    # TODO Add input shape to not always trace back
+    # TODO Check blank index
+    blank = 0
+
     def dev_step(x, y, x_len, y_len):
-        logits = model(x, y, x_len, y_len, training=False)
-        # TODO Pass correct arguments
-        # TODO Check if softmax or logit needs to be passed
-        # TODO Implement greedy decoding for error
-        loss = rnnt_loss(logits, y)
+        logits, x_len, y_len = model(x, y, x_len, y_len, training=False)
+        if not tf.test.is_gpu_available():
+            logits = tf.nn.log_softmax(logits)
+        loss = rnnt_loss(logits, y, x_len, y_len, blank)
         error = 0
-        return loss, error
+        return tf.reduce_mean(loss), error
 
     def train_step(x, y, x_len, y_len):
         with tf.GradientTape() as tape:
-            logits = model(x, y, x_len, y_len, training=True)
-            # TODO Pass correct arguments
-            # TODO Check if softmax or logit needs to be passed
-            # TODO Implement greedy decoding for error
-            loss = rnnt_loss(logits, y)
+            logits, x_len, y_len = model(x, y, x_len, y_len, training=True)
+            if not tf.test.is_gpu_available():
+                logits = tf.nn.log_softmax(logits)
+            loss = rnnt_loss(logits, y, x_len, y_len, blank)
             error = 0
 
         variables = model.trainable_variables
         gradients = tape.gradient(loss, variables)
         optimizer.apply_gradients(zip(gradients, variables))
-        return loss, error
+        return tf.reduce_mean(loss), error
 
     for epoch in range(1, num_epochs+1):
         train_loss, train_error = 0
@@ -133,6 +136,6 @@ if __name__ == "__main__":
     parser.add_argument("--std_dev", type=str, required=True, help="Standard deviation file")
 
     args = parse.parse_args()
-    kwargs = var(args)
+    kwargs = vars(args)
 
     train(**kwargs)
