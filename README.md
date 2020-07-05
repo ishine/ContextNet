@@ -59,7 +59,7 @@
   * Time warping is not used
 
 ### Author's observations:
-  * Swish activation, f(x) = x \cdot \sigma ( \beta x), works better than RELU. \beta = 1 is used in the paper
+  * Swish activation, f(x) = x * σ ( β * x), works better than RELU. β = 1 is used in the paper
   * Increasing context size in SE layer improves the model performance on test-other set. Model without any context also performs very well and is comparable with model performances with non-zero context size
   * A progressive downsampling of 8 achieves good tradeoff between computational cost and model performance
   * The proposed architecture is also effective on large scale dataset
