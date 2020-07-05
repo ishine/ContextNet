@@ -5,6 +5,8 @@ import tensorflow as tf
 from dataset import create_dataset
 from model import ConvBlock, ContextNet
 
+# TODO SpecAugment
+
 def create_conv_blocks():
     blocks = []
 
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_vocab", type=int, required=True, help="Output vocabulary size")
 
     # Label encoder arguments
-    parser.add_argument("--num_lstms", type=int, default=2, help="Label encoder LSTM layers")
+    parser.add_argument("--num_lstms", type=int, default=1, help="Label encoder LSTM layers")
     parser.add_argument("--lstm_units", type=int, default=2048, help="Label encoder LSTM width")
     parser.add_argument("--out_dim", type=int, default=640, help="Label encoder output size")
 

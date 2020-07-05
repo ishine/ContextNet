@@ -2,9 +2,11 @@ ContextNet: Improving Convolutional Neural Networks for Automatic Speech Recogni
 
 This repository contains TF2.x based implementation for [this paper](https://arxiv.org/pdf/2005.03191.pdf).
 
-TODO:
-  * Decoder is used at multiple places. What is it exactly?
-  * Add details for prediction network and joint network
+Dependencies:
+  * Pysoundfile
+  * Librosa
+  * Tensorflow 2.x
+  * [Warp-transducer](https://github.com/HawkAaron/warp-transducer)
 
 Dataset: 960 hours of [LibriSpeech](http://www.openslr.org/12)  
 Input: Sequence of 80-dimensional filterbank features using 25msec window length and 10msec stride  
@@ -47,7 +49,7 @@ Architecuture details:
     | Medium| 1.0    | 31.4       |
     | Large | 2.0    | 112.7      |
 
-  * Decoder: Single layer LSTM with input dimension 640
+  * Label encoder: Single LSTM layer with input dimension 640 and width 2048
   * (Optional/Not implemented) RNN-LM: 3 LSTM layers of width 4096
 
 SpecAugment:

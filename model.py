@@ -2,26 +2,71 @@ import tensorflow as tf
 
 
 class ConvLayer(tf.keras.layers.Layer):
-    def __init__(self, filters, kernel_size, strides, padding, activation):
+    def __init__(self, filters, kernel_size, strides, padding, activation=True):
         """ filters     : int
             kernel_size : int
             strides     : int
         """
+        assert padding == "same", "padding = '%s' not implemented?" % padding
         super(ConvLayer, self).__init__()
         self.filters = filters
         self.kernel_size = kernel_size
         self.strides = strides
         self.padding = padding
+        self.activation = activation
 
-        self.conv = tf.keras.layers.SeparableConv1D(self.filters,
-                                                    self.kernel_size,
-                                                    self.strides, self.padding)
+        if strides == 1:
+            self.conv = tf.keras.layers.SeparableConv1D(self.filters,
+                                                        self.kernel_size,
+                                                        self.strides, self.padding)
+        else:
+            self.conv = tf.keras.layers.SeparableConv1D(self.filters,
+                                                        self.kernel_size,
+                                                        self.strides, "valid")
+        self.batch_norm = tf.keras.layers.BatchNormalization()
+
+    # TODO Implement batch norm for masking/padding
+    def _batch_norm(self, x, x_len, training):
+        pass
+
+    def _convolution(self, x, x_len):
+        """ SeparableConv1D for masked input and "same" padding
+            Not verified / tested for "valid" padding
+        """
+        if self.strides > 1:
+            final_timesteps = tf.cast(tf.math.ceil(x_len / self.strides), dtype="int32")
+            required_length = self.strides * (final_timesteps - 1) + self.kernel_size
+            num_padding = required_length - x_len
+            left_padding = num_padding // 2
+            right_padding = num_padding - left_padding
+            max_left_padding = self.kernel_size // 2
+            max_right_padding = self.kernel_size - max_left_padding
+
+            # Zero padding
+            batch_size = tf.shape(x)[0]
+            feat_dim = tf.shape(x)[-1]
+            x_max_padded = tf.concat([tf.zeros([batch_size, max_left_padding, feat_dim]),
+                                     x,
+                                     tf.zeros([batch_size, max_right_padding, feat_dim])], 1)
+            max_required_length = tf.math.reduce_max(required_length)
+            start_timesteps = max_left_padding - left_padding
+
+            # Work around for x = x_max_padded[:, start_timesteps:, :]
+            idx = tf.expand_dims(tf.range(max_required_length), 0) + tf.expand_dims(start_timesteps, 1)
+            batch_id = tf.tile(tf.reshape(tf.range(batch_size), [batch_size, 1, 1]), [1, max_required_length, 1])
+            idx = tf.concat((batch_id, tf.reshape(idx, [batch_size, -1, 1])), -1)
+            x = tf.gather_nd(x_max_padded, idx)
+
+        x_len = tf.cast(tf.math.ceil(x_len / self.strides), dtype="int32")
+        mask = tf.expand_dims(tf.sequence_mask(x_len, dtype=tf.float32), -1)
+        x = mask * self.conv(x)
+        return x, x_len
+
     def call(self, x, x_len, training):
         """ x : (B, T, F) """
-
-        # TODO Check batch norm params and train/valid as well as padding
-        x = tf.layers.keras.BatchNormalization(self.conv(x))
-        if activation:
+        x, x_len = _convolution(x, x_len)
+        x = self._batch_norm(x, x_len, training=training)
+        if self.activation:
             x = tf.nn.swish(x)
         return x, x_len
 
