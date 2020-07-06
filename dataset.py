@@ -6,16 +6,12 @@ import tensorflow as tf
 
 from utils import _get_audio_features_mfcc
 
-########## Dependencies ##############
-# soundfile : pip install pysoundfile
-######################################
-
 # TODO BPE encoding
 def _get_output_sequence(vocab, transcript):
-    labels = [vocab[char] for char in transcript]
-    return np.array(labels, dtype="int32"), len(labels)
+    labels = [vocab[char] if char in vocab else vocab['<unk>'] for char in transcript]
+    return np.array(labels, dtype=np.int32), np.array(len(labels), dtype=np.int32)
 
-def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, batch_size=1):
+def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, batch_size=1, num_feats=40):
     """ librispeech_dir (str): path to directory containing librispeech data
         data_key (str) : train / dev / test
         mean (str|None) : path to file containing mean of librispeech training data
@@ -24,7 +20,6 @@ def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, ba
         Returns : tf.data.dataset instance
     """
     vocab = eval(open(vocab).read().strip())
-
     if mean:
         mean = np.loadtxt(mean).astype("float32")
     if std_dev:
@@ -49,7 +44,7 @@ def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, ba
             feats = feats - mean
         if std_dev is not None:
             feats = feats / std_dev
-        return feats, feats.shape[0]
+        return feats, np.array(feats.shape[0], dtype=np.int32)
 
     def _extract_output_sequence(transcript):
         return _get_output_sequence(vocab, transcript)
@@ -61,7 +56,9 @@ def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, ba
 
     dataset = tf.data.Dataset.from_generator(_generate_librispeech_examples,
                                              (tf.string, tf.string, tf.string))
-    dataset = dataset.map(lambda _, audio_file, transcript: _prepare(audio_file, transcript),
+    dataset = dataset.map(lambda _, audio_file, transcript: \
+                          tf.numpy_function(_prepare, [audio_file, transcript],
+                          (tf.float32, tf.int32, tf.int32, tf.int32)),
                           num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.padded_batch(batch_size, padded_shapes=([None, num_features], [None]))
+    dataset = dataset.padded_batch(batch_size, padded_shapes=([None, num_feats], [None], [], []))
     return dataset
