@@ -45,13 +45,13 @@ class ConvLayer(tf.keras.layers.Layer):
             batch_variance = tf.math.reduce_sum(batch_variance, axis=0) / num_timesteps
 
             # Update population statistics
-            self.population_mean = self.population_mean * momentum + batch_mean * (1 - momentum)
-            self.population_variance = self.population_variance * momentum + batch_variance * (1 - momentum)
+            self.population_mean.assign(self.population_mean * momentum + batch_mean * (1 - momentum))
+            self.population_variance.assign(self.population_variance * momentum + batch_variance * (1 - momentum))
             x = tf.nn.batch_normalization(x, batch_mean, batch_variance,
                                           self.beta, self.gamma, epsilon)
         else:
             # TODO Can population mean and variance be issue for initial validation steps?
-            x = tf.nn.batch_normalization(x, population_mean, population_variance,
+            x = tf.nn.batch_normalization(x, self.population_mean, self.population_variance,
                                           self.beta, self.gamma, epsilon)
         return x * tf.expand_dims(tf.sequence_mask(x_len, dtype=tf.float32), -1)
 
@@ -191,6 +191,8 @@ class LabelEncoder(tf.keras.layers.Layer):
             self.projection.append(tf.keras.layers.Dense(out_dim))
 
     def call(self, y, y_len):
+        y = tf.pad(y, [[0, 0], [1, 0]])
+        y_len += 1
         y = self.embedding(y)
         for i in range(self.num_layers):
             mask = tf.sequence_mask(y_len)
@@ -218,8 +220,8 @@ class ContextNet(tf.keras.Model):
             x_len : (B,)
             y_len : (B,)
         """
-        x, x_len = audio_encoder(x, x_len, training=training)
-        y = label_encoder(y, y_len)
+        x, x_len = self.audio_encoder(x, x_len, training=training)
+        y = self.label_encoder(y, y_len)
 
         x = tf.expand_dims(x, 2)
         y = tf.expand_dims(y, 1)

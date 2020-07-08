@@ -70,8 +70,6 @@ def train(num_units, num_vocab, num_lstms, lstm_units, out_dim,
     ckpt_manager = tf.train.CheckpointManager(ckpt, './ckpt', max_to_keep=10)
 
     # TODO Implement greedy decoding for error
-    # TODO Add input shape to not always trace back
-    # TODO Check blank index
     blank = num_vocab
 
     def dev_step(x, y, x_len, y_len):
@@ -96,22 +94,26 @@ def train(num_units, num_vocab, num_lstms, lstm_units, out_dim,
         return tf.reduce_mean(loss), error
 
     for epoch in range(1, num_epochs+1):
-        train_loss, train_error = 0, 0
+        train_loss, train_error, train_batches = 0, 0, 0
         for x, y, x_len, y_len in train_dataset:
             loss, error = train_step(x, y, x_len, y_len)
             train_loss += loss
             train_error += error
+            train_batches += 1
 
             if step % 1000 == 0:
-                dev_loss, dev_error, num_batch = 0, 0, 0
+                dev_loss, dev_error, dev_batches = 0, 0, 0
                 for x, y, x_len, y_len in dev_dataset:
                     loss, error = dev_step(x, y, x_len, y_len)
                     dev_loss += loss
                     dev_error += error
-                    num_batch += 1
+                    dev_batches += 1
                 print("Epoch %s, step %s, train loss %s, train error %s, dev loss %s, dev error %s" % 
-                         (epoch, step, train_loss/step, train_error/step, dev_loss/num_batch, dev_error/num_batch))
+                         (epoch, step, train_loss/train_batches, train_error/train_batches,
+                          dev_loss/dev_batches, dev_error/dev_batches))
                 ckpt_manager.save()
+
+            step.assign_add(1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ContextNet training module")
