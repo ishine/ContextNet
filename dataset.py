@@ -7,6 +7,8 @@ import tensorflow as tf
 from utils import _get_audio_features_mfcc
 
 # TODO BPE encoding
+# TODO 80 dimensional logmel as input
+
 def _get_output_sequence(vocab, transcript):
     if isinstance(transcript, bytes):
         transcript = transcript.decode('utf-8')
@@ -18,6 +20,7 @@ def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, ba
         data_key (str) : train / dev / test
         mean (str|None) : path to file containing mean of librispeech training data
         std_dev (str|None) : path to file containing std_dev of librispeech training data
+        num_feats (int) : input feature dimension
 
         Returns : tf.data.dataset instance
     """
@@ -59,11 +62,20 @@ def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, ba
         output_seq, seq_len = _extract_output_sequence(transcript)
         return audio_feats, output_seq, timesteps, seq_len
 
-    inputs = list(zip(*_generate_librispeech_examples()))
-    dataset = tf.data.Dataset.from_tensor_slices(inputs)
-    dataset = dataset.map(lambda input_pair: \
-                          tf.numpy_function(_prepare, [input_pair[0], input_pair[1]],
+    audios, transcripts = _generate_librispeech_examples()
+    dataset = tf.data.Dataset.from_tensor_slices((audios, transcripts))
+    dataset = dataset.shuffle(1000000)
+
+    dataset = dataset.map(lambda audio_file, transcript: \
+                          tf.numpy_function(_prepare, [audio_file, transcript],
                           (tf.float32, tf.int32, tf.int32, tf.int32)),
                           num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    dataset = dataset.padded_batch(batch_size, padded_shapes=([None, num_feats], [None], [], []))
+
+    # Remove utterances which have >300 chars
+    dataset = dataset.filter(lambda x, y, _, y_len: y_len <= 300)
+    dataset = dataset.apply(tf.data.experimental.bucket_by_sequence_length(
+                  element_length_func=lambda x, y, x_len, _: x_len,
+                  bucket_boundaries=[500, 1000, 1250, 1500, 2000],
+                  bucket_batch_sizes=[32, 16, 16, 8, 8, 4],
+                  padded_shapes=([None, num_feats], [None], [], [])))
     return dataset
