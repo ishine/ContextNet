@@ -1,6 +1,9 @@
 ## ContextNet: Improving Convolutional Neural Networks for Automatic Speech Recognition with Global Context
 
-:construction: This repository contains TF2.x based implementation for [this paper](https://arxiv.org/pdf/2005.03191.pdf).
+This repository contains TF2.x based implementation for [this paper](https://arxiv.org/pdf/2005.03191.pdf). The default setup, which is a character-based model, achieves **11.66%** and **28.31%** WERs on LibriSpeech test-clean and test-other sets respectively. These WERs can easily be improved by using:
+  * large vocabulary ([subword unit](https://arxiv.org/abs/1508.07909) is one way to achieve this)
+  * data augmentation ([SpecAugment](https://arxiv.org/abs/1904.08779) is one such technique)
+  * regularization or limiting model capacity
 
 ### Dependencies:
   * Pysoundfile

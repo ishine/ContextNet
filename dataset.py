@@ -15,7 +15,7 @@ def _get_output_sequence(vocab, transcript):
     labels = [vocab[char] if char in vocab else vocab['<unk>'] for char in transcript]
     return np.array(labels, dtype=np.int32), np.array(len(labels), dtype=np.int32)
 
-def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, batch_size=1, num_feats=40):
+def create_dataset(librispeech_dir, data_key, vocab, mean=None, std_dev=None, num_feats=40):
     """ librispeech_dir (str): path to directory containing librispeech data
         data_key (str) : train / dev / test
         mean (str|None) : path to file containing mean of librispeech training data

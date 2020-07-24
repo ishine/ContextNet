@@ -17,7 +17,7 @@ def create_conv_blocks():
 
     # C1-2 : 5 conv layers, 256 output channels, strides 1
     blocks.append(ConvBlock([256//8, 256], 5, 256, 5, 1))
-    blocks.append(ConvBlock([256//8, 256], 1, 256, 5, 1))
+    blocks.append(ConvBlock([256//8, 256], 5, 256, 5, 1))
 
     # C3 : 5 conv layers, 256 output channels, strides 2
     blocks.append(ConvBlock([256//8, 256], 5, 256, 5, 2))
@@ -44,8 +44,8 @@ def create_conv_blocks():
     for i in range(15, 21+1):
         blocks.append(ConvBlock([512//8, 512], 5, 512, 5, 1))
 
-    # C22 : 1 conv layers, 640 output channels, strides 1
-    blocks.append(ConvBlock([640//8, 640], 5, 640, 5, 1, residual=False))
+    # C22 : 1 conv layer, 640 output channels, strides 1
+    blocks.append(ConvBlock([640//8, 640], 1, 640, 5, 1, residual=False))
 
     return blocks
 
@@ -80,14 +80,14 @@ def create_optimizer(lr, warmup_steps=15000):
     return tf.keras.optimizers.Adam(learning_rate=lr)
 
 def train(num_units, num_vocab, num_lstms, lstm_units, out_dim,
-          lr, batch_size, num_epochs, data_path, vocab, mean, std_dev, num_features):
+          lr, num_epochs, data_path, vocab, mean, std_dev, num_features):
     model = create_model(num_units=num_units, num_vocab=num_vocab,
                          num_lstms=num_lstms, lstm_units=lstm_units, out_dim=out_dim)
 
     dev_dataset = create_dataset(data_path, "dev", vocab,
-                                 mean, std_dev, batch_size, num_features)
+                                 mean, std_dev, num_features)
     train_dataset = create_dataset(data_path, "train", vocab,
-                                   mean, std_dev, batch_size, num_features)
+                                   mean, std_dev, num_features)
 
     step = tf.Variable(1)
     optimizer = create_optimizer(lr)
@@ -165,8 +165,7 @@ if __name__ == "__main__":
     parser.add_argument("--out_dim", type=int, default=640, help="Label encoder output size")
 
     # Optimization arguments
-    parser.add_argument("--lr", type=float, default=0.0025, help="Learning rate")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
+    parser.add_argument("--lr", type=float, default=0.0015, help="Learning rate")
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs")
 
     # Train / validation data
