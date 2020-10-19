@@ -1,7 +1,3 @@
-########## Dependencies ##############
-# librosa : pip install librosa
-######################################
-
 # Taken from https://github.com/rwth-i6/returnn/blob/master/GeneratingDataset.py
 def _get_audio_features_mfcc(audio, sample_rate, window_len=0.025, step_len=0.010, num_feature_filters=40):
   """

@@ -24,6 +24,7 @@ class ConvLayer(tf.keras.layers.Layer):
                                                         self.kernel_size,
                                                         self.strides, "valid")
         # Batch normalization variables
+        # TODO Bias variables in previous conv layer is redundant
         self.beta = tf.Variable(tf.zeros(self.filters), trainable=True)
         self.gamma = tf.Variable(tf.ones(self.filters), trainable=True)
 
@@ -39,21 +40,20 @@ class ConvLayer(tf.keras.layers.Layer):
 
             # TODO Any gradient issue here? Need to check paper
             batch_mean = tf.math.reduce_sum(x_reshape, axis=0) / num_timesteps
-            batch_variance = tf.squared_difference(x_reshape, batch_mean), axis=0)
+            batch_variance = tf.math.squared_difference(x_reshape, batch_mean)
             batch_variance = batch_variance * tf.reshape(tf.sequence_mask(x_len, dtype=tf.float32), [-1, 1])
             batch_variance = tf.math.reduce_sum(batch_variance, axis=0) / num_timesteps
 
             # Update population statistics
-            self.population_mean = self.population_mean * momentum + batch_mean * (1 - momentum)
-            self.population_variance = self.population_variance * momentum + batch_variance * (1 - momentum)
+            self.population_mean.assign(self.population_mean * momentum + batch_mean * (1 - momentum))
+            self.population_variance.assign(self.population_variance * momentum + batch_variance * (1 - momentum))
             x = tf.nn.batch_normalization(x, batch_mean, batch_variance,
                                           self.beta, self.gamma, epsilon)
-            return x * tf.expand_dims(tf.sequence_mask(x_len, dtype=tf.float32), -1)
         else:
             # TODO Can population mean and variance be issue for initial validation steps?
-            x = tf.nn.batch_normalization(x, population_mean, population_variance,
+            x = tf.nn.batch_normalization(x, self.population_mean, self.population_variance,
                                           self.beta, self.gamma, epsilon)
-            return x * tf.expand_dims(tf.sequence_mask(x_len, dtype=tf.float32), -1)
+        return x * tf.expand_dims(tf.sequence_mask(x_len, dtype=tf.float32), -1)
 
     def _convolution(self, x, x_len):
         """ SeparableConv1D for padded input and "same" padding
@@ -90,7 +90,7 @@ class ConvLayer(tf.keras.layers.Layer):
 
     def call(self, x, x_len, training=None):
         """ x : (B, T, F) """
-        x, x_len = _convolution(x, x_len)
+        x, x_len = self._convolution(x, x_len)
         x = self._batch_norm(x, x_len, training=training)
         if self.activation:
             x = tf.nn.swish(x)
@@ -104,18 +104,16 @@ class SELayer(tf.keras.layers.Layer):
         self.num_units = num_units
         self.fc_layers = []
 
-        for i in range(len(num_units)):
-            self.fc_layers.append(tf.keras.layers.Dense(num_units[i]))
+        for num_unit in num_units:
+            self.fc_layers.append(tf.keras.layers.Dense(num_unit))
 
     def call(self, x, x_len):
         """ x : (B, T, F) """
 
-        # TODO Is mask necessary here? Output at each layer take care of masking, right?
-        mask = tf.expand_dims(tf.sequence_mask(x_len, dtype=tf.float32), -1)
-        x = x * mask
         x_orig = x
 
-        x = tf.reduce_sum(x) / x_len
+        # TODO Assumption that previous layers output masked sequence
+        x = tf.reduce_sum(x, axis=1) / tf.expand_dims(tf.cast(x_len, tf.float32), 1)
         for i in range(len(self.num_units)):
             x = tf.nn.swish(self.fc_layers[i](x))
 
@@ -142,21 +140,21 @@ class ConvBlock(tf.keras.layers.Layer):
 
         self.conv_layers = []
         strides = [strides] + [1] * (num_layers - 1)
-        for i, stride in enumerate(strides):
+        for stride in strides:
             self.conv_layers.append(ConvLayer(filters, kernel_size, stride, padding))
 
     def call(self, x, x_len, training=None):
         x_orig = x
         x_len_orig = x_len
-        for i in range(self.num_layers):
-            x, x_len = self.conv_layers(x, x_len, training)
+        for conv_layer in self.conv_layers:
+            x, x_len = conv_layer(x, x_len, training=training)
 
         if self.residual is None and self.se_layer is None:
             return x
         if self.se_layer is not None:
             x = self.se_layer(x, x_len)
         if self.residual is not None:
-            x, _ = x + self.residual(x_orig, x_len_orig)
+            x = x + self.residual(x_orig, x_len_orig)[0]
 
         return tf.nn.swish(x), x_len
 
@@ -170,13 +168,13 @@ class AudioEncoder(tf.keras.layers.Layer):
 
     def call(self, x, x_len, training=None):
         for conv_block in self.network:
-            x, x_len = conv_block(x, x_len, training)
+            x, x_len = conv_block(x, x_len, training=training)
         return x, x_len
 
 
 class LabelEncoder(tf.keras.layers.Layer):
     """ Prediction network in RNN-Transducer architecture """
-    def __init__(self, num_layers, num_units, out_dim):
+    def __init__(self, num_layers, num_units, out_dim, num_vocab, embed_dim):
         """ num_layers : int
             num_units  : int
             out_dim    : int
@@ -186,15 +184,19 @@ class LabelEncoder(tf.keras.layers.Layer):
         self.num_units = num_units
         self.out_dim = out_dim
 
+        self.embedding = tf.keras.layers.Embedding(num_vocab, embed_dim)
         self.network, self.projection = [], []
         for i in range(num_layers):
             self.network.append(tf.keras.layers.LSTM(num_units, return_sequences=True))
             self.projection.append(tf.keras.layers.Dense(out_dim))
 
     def call(self, y, y_len):
+        y = tf.pad(y, [[0, 0], [1, 0]])
+        y_len += 1
+        y = self.embedding(y)
         for i in range(self.num_layers):
             mask = tf.sequence_mask(y_len)
-            y = self.projection(self.network(y, mask))
+            y = self.projection[i](self.network[i](y, mask=mask))
         return y
 
 
@@ -206,10 +208,11 @@ class ContextNet(tf.keras.Model):
         self.num_units = num_units
         self.num_vocab = num_vocab
         self.audio_encoder = AudioEncoder(create_conv_blocks)
-        self.label_encoder = LabelEncoder(num_lstms, lstm_units, out_dim)
+        self.label_encoder = LabelEncoder(num_lstms, lstm_units,
+                                          out_dim, num_vocab, num_units)
 
         self.projection = tf.keras.layers.Dense(num_units)
-        self.output = tf.keras.layers.Dense(num_vocab + 1)
+        self.output_layer = tf.keras.layers.Dense(num_vocab + 1)
 
     def call(self, x, y, x_len, y_len, training=None):
         """ x : (B, T, F)
@@ -217,11 +220,11 @@ class ContextNet(tf.keras.Model):
             x_len : (B,)
             y_len : (B,)
         """
-        x, x_len = audio_encoder(x, x_len, training)
-        y = label_encoder(y, y_len)
+        x, x_len = self.audio_encoder(x, x_len, training=training)
+        y = self.label_encoder(y, y_len)
 
         x = tf.expand_dims(x, 2)
         y = tf.expand_dims(y, 1)
 
         z = tf.nn.tanh(self.projection(x + y))
-        return self.output(z), x_len, y_len
+        return self.output_layer(z), x_len, y_len
